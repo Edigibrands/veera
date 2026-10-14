@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'Use POST to upload an image.' });
   }
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+ if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_STORE_ID) {
     return res.status(500).json({ ok: false, error: 'Vercel Blob is not connected. Create a Blob store in the Vercel project.' });
   }
 
