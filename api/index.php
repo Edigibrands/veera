@@ -94,6 +94,7 @@ body.invoice-mode .sheet{display:none!important}
     <button type="button" class="nav-item active" data-tab="dashboard">▦ <span>Dashboard</span></button>
     <button type="button" class="nav-item" data-tab="costing">⌁ <span>Solar Costing</span></button>
     <button type="button" class="nav-item" data-tab="quotation">▤ <span>Quotation</span></button>
+    <button type="button" class="nav-item" data-tab="savedquotations">▤ <span>Saved Quotations</span></button>
     <button type="button" class="nav-item" data-tab="taxinvoice">▧ <span>Tax Invoice</span></button>
     <button type="button" class="nav-item" data-tab="materials">▦ <span>Material Master</span></button>
     <button type="button" class="nav-item" data-tab="settings">⚙ <span>Settings</span></button>
@@ -116,6 +117,15 @@ body.invoice-mode .sheet{display:none!important}
     <div class="metric-card"><span>Payment Milestones</span><strong id="dashPaymentStatus">100%</strong></div>
   </div>
   <div class="dashboard-panel"><h2>Quick actions</h2><p>Manage your solar estimate, review client details, configure company branding, and preview the customer quotation.</p><div class="toolbar" style="justify-content:flex-start"><button class="btn" type="button" data-goto="costing">Edit costing</button><button class="btn secondary" type="button" data-goto="quotation">Open quotation</button><button class="btn secondary" type="button" data-goto="settings">Company settings</button></div></div>
+</section>
+<section class="tab-page no-print" id="savedQuotationsPage" style="display:none">
+  <h1 class="page-heading">Saved Quotations</h1>
+  <p class="page-subtitle">Every quotation you save appears here. Open one to edit it, or import it into Tax Invoice.</p>
+  <div class="dashboard-panel">
+    <div class="toolbar" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Quotation Records</h2><button class="btn" type="button" data-goto="quotation">Create / edit quotation</button></div>
+    <div id="savedQuotationList" style="margin-top:14px"></div>
+    <p class="note" style="margin-top:12px">Records are saved in this browser on this device. They are not yet shared between different browsers or computers.</p>
+  </div>
 </section>
 <section class="tab-page no-print" id="materialsPage" style="display:none">
   <h1 class="page-heading">Material Master</h1>
@@ -199,9 +209,28 @@ body.invoice-mode .sheet{display:none!important}
 <script>
 const quoteSaveKey='veeraSolarSavedQuotationV1',savedQuotesKey='veeraSolarSavedQuotationsV1',invoiceSaveKey='veeraSolarSavedInvoiceV1';
 function readSavedQuotations(){try{const v=JSON.parse(localStorage.getItem(savedQuotesKey)||'[]');return Array.isArray(v)?v:[];}catch(e){return [];}}
-function quotationSnapshot(){calculate();const d={};document.querySelectorAll('.sheet input,.sheet textarea,.sheet select').forEach(e=>{if(e.id)d[e.id]=e.value;});d.items=[...$('itemsBody').rows].map(tr=>({desc:tr.querySelector('.desc').value,qty:tr.querySelector('.qty').value,unit:tr.querySelector('.unit').value,rate:tr.querySelector('.rate').value}));d._recordKey=String(d.quoteNo||'').trim()||('QUOTE-'+Date.now());return d;}
+function quotationSnapshot(){calculate();const d={};document.querySelectorAll('.sheet input,.sheet textarea,.sheet select').forEach(e=>{if(e.id)d[e.id]=e.value;});d.items=[...$('itemsBody').rows].map(tr=>({desc:tr.querySelector('.desc').value,qty:tr.querySelector('.qty').value,unit:tr.querySelector('.unit').value,rate:tr.querySelector('.rate').value}));d.totalValue=$('netTotal').textContent;d._recordKey=String(d.quoteNo||'').trim()||('QUOTE-'+Date.now());return d;}
 function populateQuotationSelector(preselect=''){const sel=$('invoiceFromQuotation');if(!sel)return;let list=readSavedQuotations();try{const legacy=JSON.parse(localStorage.getItem(quoteSaveKey)||'null');if(legacy&&typeof legacy==='object'){const key=String(legacy.quoteNo||'').trim()||'LEGACY-QUOTATION';if(!list.some(q=>(q._recordKey||String(q.quoteNo||'').trim())===key)){legacy._recordKey=key;list.push(legacy);localStorage.setItem(savedQuotesKey,JSON.stringify(list));}}}catch(e){}const prior=preselect||sel.value;sel.innerHTML='';const blank=document.createElement('option');blank.value='';blank.textContent='Choose a saved quotation…';sel.appendChild(blank);const current=document.createElement('option');current.value='__current__';current.textContent='Current quotation on screen';sel.appendChild(current);list.forEach((q,i)=>{const opt=document.createElement('option');opt.value=q._recordKey||String(q.quoteNo||('saved-'+i));opt.textContent=[q.quoteNo||'Quotation',q.clientName||'Unnamed client',q.quoteDate||''].filter(Boolean).join(' — ');sel.appendChild(opt);});if(prior&&[...sel.options].some(o=>o.value===prior))sel.value=prior;}
-function saveQuotation(){const d=quotationSnapshot();try{localStorage.setItem(quoteSaveKey,JSON.stringify(d));let list=readSavedQuotations();const key=d._recordKey;const idx=list.findIndex(q=>(q._recordKey||String(q.quoteNo||'').trim())===key);if(idx>=0)list[idx]=d;else list.push(d);if(list.length>100)list=list.slice(-100);localStorage.setItem(savedQuotesKey,JSON.stringify(list));populateQuotationSelector(key);$('quoteSaveStatus').textContent='Quotation saved in this browser and added to From Quotation.';$('quoteSaveStatus').style.color='var(--green)';}catch(e){$('quoteSaveStatus').textContent='Could not save quotation in browser storage.';$('quoteSaveStatus').style.color='#b43a2d';}}
+function saveQuotation(){const d=quotationSnapshot();try{localStorage.setItem(quoteSaveKey,JSON.stringify(d));let list=readSavedQuotations();const key=d._recordKey;const idx=list.findIndex(q=>(q._recordKey||String(q.quoteNo||'').trim())===key);if(idx>=0)list[idx]=d;else list.push(d);if(list.length>100)list=list.slice(-100);localStorage.setItem(savedQuotesKey,JSON.stringify(list));populateQuotationSelector(key);renderSavedQuotations();$('quoteSaveStatus').textContent='Quotation saved in this browser and added to Saved Quotations.';$('quoteSaveStatus').style.color='var(--green)';}catch(e){$('quoteSaveStatus').textContent='Could not save quotation in browser storage.';$('quoteSaveStatus').style.color='#b43a2d';}}
+function renderSavedQuotations(){
+ const host=$('savedQuotationList'); if(!host)return;
+ const list=readSavedQuotations().slice().reverse();
+ if(!list.length){host.innerHTML='<p class="note">No saved quotations yet. Open Quotation, complete the details, and click Save quotation.</p>';return;}
+ host.innerHTML='<div class="tablewrap"><table><thead><tr><th>Quotation No.</th><th>Client</th><th>Date</th><th>Capacity</th><th>Total Value</th><th>Actions</th></tr></thead><tbody>'+list.map((q)=>{
+  const key=q._recordKey||String(q.quoteNo||'').trim();
+  const total=q.totalValue||q.netTotal||q.paymentTotal||'';
+  return '<tr><td>'+escapeHtml(q.quoteNo||'—')+'</td><td>'+escapeHtml(q.clientName||'—')+'</td><td>'+escapeHtml(q.quoteDate||'—')+'</td><td>'+escapeHtml(q.capacity||'—')+' kW</td><td>'+escapeHtml(total||'Open to recalculate')+'</td><td style="white-space:nowrap"><button type="button" class="btn secondary saved-quote-open" data-record-key="'+escapeHtml(key)+'">Open / Edit</button> <button type="button" class="btn secondary saved-quote-invoice" data-record-key="'+escapeHtml(key)+'">Create invoice</button> <button type="button" class="btn secondary saved-quote-delete" data-record-key="'+escapeHtml(key)+'">Delete</button></td></tr>';
+ }).join('')+'</tbody></table></div>';
+ host.querySelectorAll('.saved-quote-open').forEach(b=>b.addEventListener('click',()=>loadQuotationRecord(b.dataset.recordKey)));
+ host.querySelectorAll('.saved-quote-invoice').forEach(b=>b.addEventListener('click',()=>{populateQuotationSelector(b.dataset.recordKey);$('invoiceFromQuotation').value=b.dataset.recordKey;importQuotationItems();setTab('taxinvoice');window.scrollTo({top:0,behavior:'smooth'});}));
+ host.querySelectorAll('.saved-quote-delete').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.recordKey;if(!confirm('Delete this saved quotation?'))return;const next=readSavedQuotations().filter(q=>(q._recordKey||String(q.quoteNo||'').trim())!==key);localStorage.setItem(savedQuotesKey,JSON.stringify(next));renderSavedQuotations();populateQuotationSelector();}));
+}
+function loadQuotationRecord(key){
+ const q=readSavedQuotations().find(x=>(x._recordKey||String(x.quoteNo||'').trim())===key);if(!q)return;
+ document.querySelectorAll('.sheet input,.sheet textarea,.sheet select').forEach(el=>{if(el.id&&Object.prototype.hasOwnProperty.call(q,el.id)&&typeof q[el.id]!=='object')el.value=q[el.id];});
+ if(Array.isArray(q.items)){$('itemsBody').innerHTML='';q.items.forEach(x=>addItem({desc:x.desc||'',qty:Number(x.qty)||0,unit:x.unit||'Nos',rate:Number(x.rate)||0}));}
+ calculate();setTab('quotation');$('quoteSaveStatus').textContent='Opened saved quotation '+(q.quoteNo||'')+'. Edit it and click Save quotation to update the saved record.';$('quoteSaveStatus').style.color='var(--green)';window.scrollTo({top:0,behavior:'smooth'});
+}
 function loadSavedQuotation(){try{const d=JSON.parse(localStorage.getItem(quoteSaveKey)||'null');if(!d)return;Object.entries(d).forEach(([id,v])=>{const el=$(id);if(el&&typeof v!=='object')el.value=v;});if(Array.isArray(d.items)){$('itemsBody').innerHTML='';d.items.forEach(x=>addItem({desc:x.desc,qty:Number(x.qty)||0,unit:x.unit||'Nos',rate:Number(x.rate)||0}));}}catch(e){}}
 function addInvoiceItem(x={desc:'Solar equipment / service',hsn:'',qty:1,unit:'Nos',rate:0}){const tr=document.createElement('tr');tr.innerHTML='<td class="inv-sn"></td><td><input class="inv-desc" aria-label="Particulars"></td><td><input class="inv-hsn" aria-label="HSN/SAC"></td><td><input class="inv-qty" type="number" min="0" step="0.01" aria-label="Quantity"></td><td><input class="inv-unit" aria-label="Unit"></td><td><input class="inv-rate" type="number" min="0" step="0.01" aria-label="Rate"></td><td class="inv-amount">₹0.00</td><td class="no-print"><button type="button" class="remove inv-remove">×</button></td>';tr.querySelector('.inv-desc').value=x.desc||'';tr.querySelector('.inv-hsn').value=x.hsn||'';tr.querySelector('.inv-qty').value=x.qty??1;tr.querySelector('.inv-unit').value=x.unit||'Nos';tr.querySelector('.inv-rate').value=x.rate??0;tr.querySelectorAll('input').forEach(e=>e.addEventListener('input',calculateInvoice));tr.querySelector('.inv-remove').addEventListener('click',()=>{tr.remove();calculateInvoice()});$('invItemsBody').appendChild(tr);calculateInvoice();}
 function wordsIN(value){let n=Math.round(Number(value)||0);if(!n)return 'Zero Rupees Only';const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'],t=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];const u=x=>x<20?a[x]:t[Math.floor(x/10)]+(x%10?' '+a[x%10]:'');const h=x=>(x>=100?a[Math.floor(x/100)]+' Hundred '+(x%100?u(x%100):''):u(x)).trim();let out=[];let c=Math.floor(n/10000000);n%=10000000;let l=Math.floor(n/100000);n%=100000;let th=Math.floor(n/1000);n%=1000;if(c)out.push(h(c)+' Crore');if(l)out.push(h(l)+' Lakh');if(th)out.push(h(th)+' Thousand');if(n)out.push(h(n));return out.join(' ')+' Rupees Only';}
@@ -271,14 +300,14 @@ $('resetBtn').addEventListener('click',()=>{ $('itemsBody').innerHTML='';initial
 function setTab(tab){
  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
  document.body.classList.toggle('invoice-mode',tab==='taxinvoice');
- const settings=$('brandSettings'),dashboard=$('dashboardPage'),materials=$('materialsPage'),taxForm=$('taxInvoicePage'),sheet=document.querySelector('.sheet'),invoiceSheet=$('invoiceSheet'),toolbar=$('quotationToolbar');
- dashboard.style.display=tab==='dashboard'?'block':'none';materials.style.display=tab==='materials'?'block':'none';settings.style.display=tab==='settings'?'block':'none';taxForm.style.display=tab==='taxinvoice'?'block':'none';
- sheet.style.display=(tab==='quotation'||tab==='costing')?'block':'none';invoiceSheet.style.display=tab==='taxinvoice'?'block':'none';
+ const settings=$('brandSettings'),dashboard=$('dashboardPage'),materials=$('materialsPage'),savedPage=$('savedQuotationsPage'),taxForm=$('taxInvoicePage'),sheet=document.querySelector('.sheet'),invoiceSheet=$('invoiceSheet'),toolbar=$('quotationToolbar');
+ dashboard.style.display=tab==='dashboard'?'block':'none';materials.style.display=tab==='materials'?'block':'none';savedPage.style.display=tab==='savedquotations'?'block':'none';settings.style.display=tab==='settings'?'block':'none';taxForm.style.display=tab==='taxinvoice'?'block':'none';
+ sheet.style.display=(tab==='quotation'||tab==='costing')?'block':'none';invoiceSheet.style.display='none';
  const header=sheet.querySelector('.brandbar'),content=sheet.querySelector('.content'),footer=sheet.querySelector('.footer');
  if(tab==='costing'){header.style.display='none';footer.style.display='none';content.querySelectorAll('.quotation-section').forEach(sec=>sec.style.display=sec.dataset.section==='costing'?'block':'none');content.querySelector('.eyebrow').style.display='none';content.querySelector('.title').style.display='none';content.querySelector('.intro').style.display='none';}
  else if(tab==='quotation'){header.style.display='';footer.style.display='';content.querySelectorAll('.quotation-section').forEach(sec=>sec.style.display='');content.querySelector('.eyebrow').style.display='';content.querySelector('.title').style.display='';content.querySelector('.intro').style.display='';}
- if(['settings','dashboard','materials','taxinvoice'].includes(tab)&&tab!=='taxinvoice')sheet.style.display='none';
- if(tab==='materials')renderMaterialMaster();if(toolbar)toolbar.style.display=(tab==='quotation'||tab==='costing')?'flex':'none';
+ if(['settings','dashboard','materials','savedquotations','taxinvoice'].includes(tab))sheet.style.display='none';
+ if(tab==='materials')renderMaterialMaster();if(tab==='savedquotations')renderSavedQuotations();if(toolbar)toolbar.style.display=(tab==='quotation'||tab==='costing')?'flex':'none';
  $('topPreviewBtn').textContent=tab==='taxinvoice'?'Preview invoice':'Preview quotation';$('topPrintBtn').textContent=tab==='taxinvoice'?'Print invoice / PDF':'Print / Save PDF';
 }
 function renderMaterialMaster(){
@@ -313,7 +342,7 @@ $('topPreviewBtn').addEventListener('click',()=>{if(document.body.classList.cont
 $('topPrintBtn').addEventListener('click',()=>{if(document.body.classList.contains('invoice-mode')){calculateInvoice();window.print();}else{setTab('quotation');window.print();}});
 $('applyBrand').addEventListener('click',applyBrand);$('resetBrand').addEventListener('click',resetBrand);$('previewBtn').addEventListener('click',openPreview);$('closePreview').addEventListener('click',()=>{$('previewModal').classList.remove('open');resetPreviewTitle();});$('previewPrint').addEventListener('click',()=>window.print());$('previewModal').addEventListener('click',e=>{if(e.target===$('previewModal')){$('previewModal').classList.remove('open');resetPreviewTitle();}});initBrand();
 const now=new Date();$('quoteDate').value=now.toISOString().slice(0,10);const later=new Date(now);later.setDate(later.getDate()+15);$('validUntil').value=later.toISOString().slice(0,10);$('invDate').value=now.toISOString().slice(0,10);
-initialItems.forEach(addItem);loadSavedQuotation();calculate();populateQuotationSelector();addInvoiceItem({desc:'Solar equipment / installation',hsn:'',qty:1,unit:'Nos',rate:0});loadSavedInvoice();calculateInvoice();setTab('dashboard');
+initialItems.forEach(addItem);loadSavedQuotation();calculate();populateQuotationSelector();renderSavedQuotations();addInvoiceItem({desc:'Solar equipment / installation',hsn:'',qty:1,unit:'Nos',rate:0});loadSavedInvoice();calculateInvoice();setTab('dashboard');
 // Extra safeguard: update payment amounts directly from the displayed quotation total
 // whenever any payment percentage changes, without depending on other costing updates.
 function recalculatePaymentAmountsImmediately(){
