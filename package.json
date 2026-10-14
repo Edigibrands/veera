@@ -1,0 +1,11 @@
+{
+  "name": "veera-solar-business-suite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Veera Solar quotation app hosted on Vercel with PHP runtime and Vercel Blob uploads",
+  "engines": { "node": "22.x" },
+  "dependencies": {
+    "@vercel/blob": "^2.0.0",
+    "busboy": "^1.6.0"
+  }
+}
