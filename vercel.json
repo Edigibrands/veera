@@ -1,3 +1,31 @@
 {
-  "version": 2
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.php",
+      "use": "community-php"
+    },
+    {
+      "src": "api/calculate.php",
+      "use": "community-php"
+    },
+    {
+      "src": "api/upload.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/",
+      "dest": "/api/index.php"
+    },
+    {
+      "src": "/api/calculate.php",
+      "dest": "/api/calculate.php"
+    },
+    {
+      "src": "/api/upload",
+      "dest": "/api/upload.js"
+    }
+  ]
 }
