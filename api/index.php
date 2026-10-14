@@ -1,5 +1,32 @@
 <?php
-// Vercel serves this PHP page through the vercel-php community runtime.
+// Server-side upload endpoint: keep image files on disk instead of localStorage (avoids browser quota errors).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['brand_upload'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    $requestedKind = $_POST['kind'] ?? 'logo';
+    $kind = in_array($requestedKind, ['header', 'logo', 'qr'], true) ? $requestedKind : 'logo';
+    if (!isset($_FILES['asset']) || $_FILES['asset']['error'] !== UPLOAD_ERR_OK) {
+        http_response_code(400); echo json_encode(['ok'=>false,'error'=>'No image uploaded or upload failed.']); exit;
+    }
+    $file = $_FILES['asset'];
+    if ($file['size'] > 2 * 1024 * 1024) {
+        http_response_code(400); echo json_encode(['ok'=>false,'error'=>'Image must be 2 MB or smaller.']); exit;
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($file['tmp_name']);
+    $exts = ['image/png'=>'png','image/jpeg'=>'jpg','image/webp'=>'webp'];
+    if (!isset($exts[$mime])) {
+        http_response_code(400); echo json_encode(['ok'=>false,'error'=>'Use PNG, JPG or WEBP image.']); exit;
+    }
+    $dir = __DIR__ . DIRECTORY_SEPARATOR . 'uploads';
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        http_response_code(500); echo json_encode(['ok'=>false,'error'=>'Could not create uploads folder.']); exit;
+    }
+    $filename = 'solar-' . $kind . '.' . $exts[$mime];
+    if (!move_uploaded_file($file['tmp_name'], $dir . DIRECTORY_SEPARATOR . $filename)) {
+        http_response_code(500); echo json_encode(['ok'=>false,'error'=>'Could not save uploaded image. Check folder permissions.']); exit;
+    }
+    echo json_encode(['ok'=>true,'url'=>'uploads/' . $filename]); exit;
+}
 $brand = 'VEERA SOLAR';
 $location = 'VELAPUR';
 ?>
@@ -197,8 +224,8 @@ $('logoThumb').src=activeBrand.logo||'';$('headerThumb').src=activeBrand.header|
  $('preparedBy').value=activeBrand.authorized||'';$('businessPhone').value=activeBrand.mobile||'';$('businessEmail').value=activeBrand.email||'';$('businessAddress').value=[activeBrand.address,activeBrand.gstin?'GSTIN: '+activeBrand.gstin:''].filter(Boolean).join(' | ');$('invSignatory').value=activeBrand.authorized||'';
  $('invoiceHeaderBanner').src=activeBrand.header||'';$('invoiceHeaderBanner').style.display=activeBrand.header?'block':'none';$('invoiceHeader').classList.toggle('has-banner',!!activeBrand.header);$('invoiceBrandIdentity').style.display=activeBrand.header?'none':'flex';$('invoiceBrandContact').textContent=[activeBrand.mobile,activeBrand.email].filter(Boolean).join(' • ');
  $('invoiceLogo').src=activeBrand.logo||'veera-solar-logo.png';$('invoiceBrandName').textContent=activeBrand.name||'VEERA SOLAR';$('invoiceBrandLocation').textContent=activeBrand.location||'';$('invoiceCompanyTitle').textContent=activeBrand.name||'';$('invoiceCompanyAddress').textContent=activeBrand.address||'';$('invoiceCompanyGSTIN').textContent=activeBrand.gstin?'GSTIN: '+activeBrand.gstin:'';$('invoiceFooterBrand').textContent=[activeBrand.name,activeBrand.location].filter(Boolean).join(' ');$('invoiceFooterAddress').textContent=activeBrand.address||'';$('invoiceFooterContact').textContent=[activeBrand.mobile,activeBrand.email].filter(Boolean).join(' • ');$('outForCompany').textContent='For '+(activeBrand.name||'Company');$('outInvoiceQR').src=activeBrand.qr||'';$('outInvoiceQR').style.display=activeBrand.qr?'block':'none';} 
-async function uploadBrandFile(file,kind){if(!file)return '';const fd=new FormData();fd.append('brand_upload','1');fd.append('kind',kind);fd.append('asset',file);const r=await fetch('/api/upload',{method:'POST',body:fd});let d={};try{d=await r.json()}catch(e){}if(!r.ok||!d.ok)throw new Error(d.error||'Image upload failed. Check Vercel Blob setup and deployment logs.');return d.url;}
-async function applyBrand(){try{activeBrand.name=$('brandName').value.trim()||'Solar Company';activeBrand.location=$('brandLocation').value.trim();activeBrand.mobile=$('brandMobile').value.trim();activeBrand.email=$('brandEmail').value.trim();activeBrand.address=$('brandAddress').value.trim();activeBrand.authorized=$('brandAuthorized').value.trim();activeBrand.gstin=$('brandGSTIN').value.trim();const logo=await uploadBrandFile($('logoUpload').files[0],'logo');const header=await uploadBrandFile($('headerUpload').files[0],'header');const qr=await uploadBrandFile($('qrUpload').files[0],'qr');if(logo)activeBrand.logo=logo;if(header)activeBrand.header=header;if(qr)activeBrand.qr=qr;localStorage.setItem('veeraSolarBrandText',JSON.stringify({name:activeBrand.name,location:activeBrand.location,mobile:activeBrand.mobile,email:activeBrand.email,address:activeBrand.address,authorized:activeBrand.authorized,gstin:activeBrand.gstin,logo:activeBrand.logo,header:activeBrand.header,qr:activeBrand.qr}));syncBrand();$('brandStatus').textContent='Saved successfully. Images are stored in Vercel Blob.';$('brandStatus').style.color='var(--green)';}catch(e){$('brandStatus').textContent=e.message+' Check that a Vercel Blob store is connected to this project.';$('brandStatus').style.color='#b43a2d';}}
+async function uploadBrandFile(file,kind){if(!file)return '';const fd=new FormData();fd.append('brand_upload','1');fd.append('kind',kind);fd.append('asset',file);const r=await fetch(location.pathname,{method:'POST',body:fd});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload failed');return d.url;}
+async function applyBrand(){try{activeBrand.name=$('brandName').value.trim()||'Solar Company';activeBrand.location=$('brandLocation').value.trim();activeBrand.mobile=$('brandMobile').value.trim();activeBrand.email=$('brandEmail').value.trim();activeBrand.address=$('brandAddress').value.trim();activeBrand.authorized=$('brandAuthorized').value.trim();activeBrand.gstin=$('brandGSTIN').value.trim();const logo=await uploadBrandFile($('logoUpload').files[0],'logo');const header=await uploadBrandFile($('headerUpload').files[0],'header');const qr=await uploadBrandFile($('qrUpload').files[0],'qr');if(logo)activeBrand.logo=logo;if(header)activeBrand.header=header;if(qr)activeBrand.qr=qr;localStorage.setItem('veeraSolarBrandText',JSON.stringify({name:activeBrand.name,location:activeBrand.location,mobile:activeBrand.mobile,email:activeBrand.email,address:activeBrand.address,authorized:activeBrand.authorized,gstin:activeBrand.gstin,logo:activeBrand.logo,header:activeBrand.header,qr:activeBrand.qr}));syncBrand();$('brandStatus').textContent='Saved successfully. Images are stored in /uploads.';$('brandStatus').style.color='var(--green)';}catch(e){$('brandStatus').textContent=e.message+' Ensure the PHP project folder is writable.';$('brandStatus').style.color='#b43a2d';}}
 function initBrand(){try{const d=JSON.parse(localStorage.getItem('veeraSolarBrandText')||'null');if(d)activeBrand={...brandDefaults,...d};}catch(e){}$('brandName').value=activeBrand.name;$('brandLocation').value=activeBrand.location;$('brandMobile').value=activeBrand.mobile;$('brandEmail').value=activeBrand.email;$('brandAddress').value=activeBrand.address;$('brandAuthorized').value=activeBrand.authorized||'';$('brandGSTIN').value=activeBrand.gstin||'';syncBrand();}
 function resetBrand(){activeBrand={...brandDefaults};localStorage.removeItem('veeraSolarBrandText');$('brandName').value=activeBrand.name;$('brandLocation').value=activeBrand.location;$('brandMobile').value='';$('brandEmail').value='';$('brandAddress').value=activeBrand.address;$('brandAuthorized').value='';$('brandGSTIN').value='';$('qrUpload').value='';$('brandStatus').textContent='Default fields restored. Existing uploaded files are not deleted.';syncBrand();}
 function openPreview(){calculate();const clone=document.querySelector('.sheet').cloneNode(true);clone.querySelectorAll('.no-print,.internal-only,.item-code,[data-internal="true"],.notice').forEach(e=>e.remove());clone.querySelectorAll('input,textarea,select').forEach(el=>{const span=document.createElement('span');span.textContent=el.tagName==='SELECT'?el.options[el.selectedIndex]?.text:(el.value||'');span.style.whiteSpace='pre-wrap';el.replaceWith(span)});$('previewPaper').innerHTML='';$('previewPaper').appendChild(clone);$('previewModal').classList.add('open');}
@@ -280,4 +307,18 @@ $('topPrintBtn').addEventListener('click',()=>{if(document.body.classList.contai
 $('applyBrand').addEventListener('click',applyBrand);$('resetBrand').addEventListener('click',resetBrand);$('previewBtn').addEventListener('click',openPreview);$('closePreview').addEventListener('click',()=>{$('previewModal').classList.remove('open');resetPreviewTitle();});$('previewPrint').addEventListener('click',()=>window.print());$('previewModal').addEventListener('click',e=>{if(e.target===$('previewModal')){$('previewModal').classList.remove('open');resetPreviewTitle();}});initBrand();
 const now=new Date();$('quoteDate').value=now.toISOString().slice(0,10);const later=new Date(now);later.setDate(later.getDate()+15);$('validUntil').value=later.toISOString().slice(0,10);$('invDate').value=now.toISOString().slice(0,10);
 initialItems.forEach(addItem);loadSavedQuotation();calculate();addInvoiceItem({desc:'Solar equipment / installation',hsn:'',qty:1,unit:'Nos',rate:0});loadSavedInvoice();calculateInvoice();setTab('dashboard');
+// Extra safeguard: update payment amounts directly from the displayed quotation total
+// whenever any payment percentage changes, without depending on other costing updates.
+function recalculatePaymentAmountsImmediately(){
+  const totalElement = $('paymentTotal') || $('netTotal');
+  const total = Number(String(totalElement ? totalElement.textContent : '0').replace(/[^0-9.-]/g, '')) || 0;
+  updatePaymentAmounts(total);
+}
+['advancePct','installPct','commissionPct'].forEach(id => {
+  const field = $(id);
+  if (!field) return;
+  field.addEventListener('input', recalculatePaymentAmountsImmediately);
+  field.addEventListener('change', recalculatePaymentAmountsImmediately);
+});
+
 </script></div></div></body></html>
