@@ -67,7 +67,7 @@ module.exports = async function handler(req, res) {
       access: 'public',
       contentType: fileMime,
       addRandomSuffix: true,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+      storeId: process.env.veerapublicimages_STORE_ID,
     });
     return res.status(200).json({ ok: true, url: blob.url });
   } catch (err) {
