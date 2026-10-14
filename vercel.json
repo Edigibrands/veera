@@ -1,31 +1,22 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/index.php",
-      "use": "community-php"
-    },
-    {
-      "src": "api/calculate.php",
-      "use": "community-php"
-    },
-    {
-      "src": "api/upload.js",
-      "use": "@vercel/node"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/*.php": {
+      "runtime": "vercel-php@0.9.0"
     }
-  ],
+  },
   "routes": [
     {
-      "src": "/",
-      "dest": "/api/index.php"
+      "src": "/api/upload",
+      "dest": "/api/upload.js"
     },
     {
       "src": "/api/calculate.php",
       "dest": "/api/calculate.php"
     },
     {
-      "src": "/api/upload",
-      "dest": "/api/upload.js"
+      "src": "/(.*)",
+      "dest": "/api/index.php"
     }
   ]
 }
